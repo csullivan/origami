@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# Copyright 2014-2016 Chris Sullivan
 import readline, glob
 import fortranformat as form
 import numpy as np
