@@ -69,7 +69,7 @@ def get_obtd(obtd_filename,dj):
 
 def get_number_of_obtds_from_fold_input_file(filelist):
     obtd_count_projectile = 0
-    for i,line in enumerate(filelist):        
+    for i,line in enumerate(filelist):
         if i>4:
             line = line.split()
             if len(line) == 5:
@@ -97,25 +97,25 @@ def init_from_template():
 
     n=0 # line counter
     ################### Line 1 ###################
-    line = form.FortranRecordReader('(I5,I5,A7)')
+    line = form.FortranRecordReader('(2I5,A8)')
     output_file = line.read(filelist[n])[2]; n+=1
     ################### Line 2 ###################
     line = form.FortranRecordReader('(I5,F5.2,F10.0,F10.0,I10,I4,I4)')
     nr,ns,beam_energy_lab,a,blank,blank,blank = line.read(filelist[n]); n+=1
     ################# Projectile #################
     ################### Line 3 ###################
-    line = form.FortranRecordReader('(F10.1,A1,F9.1,A1)')    
+    line = form.FortranRecordReader('(F10.1,A1,F9.1,A1)')
     jpf,ppf,jpi,ppi = line.read(filelist[n]); n+=1
     djp = max(abs(jpf - jpi),1.0) # A guess, user can enter below
     ################### Line 4 ###################
     line = form.FortranRecordReader('(F5.1,A10,F10.1,A11)')
     tpf,tzpf,tpi,tzpi = line.read(filelist[n]); n+=1
-    ################### Line 5 ###################  
+    ################### Line 5 ###################
     line = form.FortranRecordReader('(I5,I5,F7.3)')
     ntypf_p,koptn_p,alpha_p = line.read(filelist[n]); n+=1
     ################### Line 6 ###################
     n+=obtd_count_proj+1 # extra +1 for -1 -1 terminating line
-    line = form.FortranRecordReader('(A7)')
+    line = form.FortranRecordReader('(A8)')
     wsaw_proj = line.read(filelist[n])[0]; n+=1
     ################### Target ###################
     ################### Line 3 ###################
@@ -125,12 +125,12 @@ def init_from_template():
     ################### Line 4 ###################
     line = form.FortranRecordReader('(F5.1,A10,F10.1,A11)')
     ttf,tztf,tti,tzti = line.read(filelist[n]); n+=1
-    ################### Line 5 ###################    
+    ################### Line 5 ###################
     line = form.FortranRecordReader('(I5,I5,F7.3)')
     ntypf_t,koptn_t,alpha_t = line.read(filelist[n]); n+=1
     ################### Line 6 ###################
     n+=obtd_count_targ+1 # extra +1 for -1 -1 terminating line
-    line = form.FortranRecordReader('(A7)')
+    line = form.FortranRecordReader('(A8)')
     wsaw_targ = line.read(filelist[n])[0]; n+=1
     ################### Line 6 ###################
     line = form.FortranRecordReader('(F6.3,F9.2,F11.3,A12)')
@@ -144,7 +144,7 @@ def init_from_template():
     print "\n\n######"
     print "Template file loaded, beginning generation of new input file from template. Press enter for each line and if a change is desired, enter it."
     print "######\n\n"
-    file = open(filename,"wb")    
+    file = open(filename,"wb")
     manual_entry = get("Would you like the full version of entry, enter no for the abridged version.","no")
     if manual_entry == "yes":
         manual_entry = True
@@ -152,9 +152,15 @@ def init_from_template():
         manual_entry = False
 
 
-        
-      ################### Line 1 ###################        
-    output_file = get("Enter a filename for the FOLD output file.\nNote that this filename is restricted to 8 characters or less",output_file)    
+    def padstr(x):
+        if len(x) < 8:
+            for i in range(0,8-len(x)):
+                x += " "
+        return x
+
+      ################### Line 1 ###################
+    output_file = get("Enter a filename for the FOLD output file.\nNote that this filename is restricted to 8 characters or less",output_file)
+    output_file = padstr(output_file)
     line = form.FortranRecordWriter('(I5,I5,A8)')
     line = line.write([1,1,output_file[0:9]])
     file.write(line+'\n')
@@ -185,7 +191,7 @@ def init_from_template():
     line = form.FortranRecordWriter('(F5.1,A10,F10.1,A11)')
     line = line.write([tpf,tzpf,tpi,tzpi])
     file.write(line+'\n')
-    ################### Line 5 ###################    
+    ################### Line 5 ###################
     if manual_entry:
         ntypf_p = int(get("NTYPF (=1 static, =2 inelastic, =3 charge exchange):\n",ntypf_p))
         koptn_p = int(get("Transition amplitude type: 1 (S[T]), 2 (S[pn]), 3 (Z[T] - OXBASH OBTD), 4 (Z[pn]), 5 (Wildenthal):\n",koptn_p))
@@ -198,8 +204,8 @@ def init_from_template():
     djp = float(get("Change in spin of projectile: <<<<<\n",djp))
     dtp = float(get("Change in isospin of projectile:\n",1.0))
     obtd_filename_p = str(get("Enter filename/path to OXBASH obtd file","t331dp150.obd"))
-    fold_p_obtds = get_obtd(obtd_filename_p,djp) 
-    prefactor_p = get_zT_prefactor(jpi,tpi,float(tzpi),dtp,float(tzpf)-float(tzpi),tpf,float(tzpf))   
+    fold_p_obtds = get_obtd(obtd_filename_p,djp)
+    prefactor_p = get_zT_prefactor(jpi,tpi,float(tzpi),dtp,float(tzpf)-float(tzpi),tpf,float(tzpf))
     print "Projectile prefactor = ",prefactor_p
     for obtd in fold_p_obtds:
         line = form.FortranRecordWriter('(I5,I5,I5,F5.1,F17.6)')
@@ -211,7 +217,8 @@ def init_from_template():
     file.write(line+'\n')
     if manual_entry:
         wsaw_proj = str(get("Enter filename of projectile WSAW radial wavefunction file:\n",wsaw_proj))
-    line = form.FortranRecordWriter('(A7)')
+    wsaw_proj = padstr(wsaw_proj)
+    line = form.FortranRecordWriter('(A8)')
     line = line.write([wsaw_proj])
     file.write(line+'\n')
     ################### Target ###################
@@ -233,7 +240,7 @@ def init_from_template():
     line = form.FortranRecordWriter('(F5.1,A10,F10.1,A11)')
     line = line.write([ttf,tztf,tti,tzti])
     file.write(line+'\n')
-    ################### Line 5 ###################    
+    ################### Line 5 ###################
     if manual_entry:
         ntypf_t = int(get("NTYPF (=1 static, =2 inelastic, =3 charge exchange):\n",ntypf_t))
         koptn_t = int(get("Transition amplitude type: 1 (S[T]), 2 (S[pn]), 3 (Z[T] - OXBASH OBTD), 4 (Z[pn]), 5 (Wildenthal):\n",koptn_t))
@@ -242,12 +249,12 @@ def init_from_template():
     line = line.write([ntypf_t,koptn_t,alpha_t])
     file.write(line+'\n')
     ################### Line 6 ###################
-     ################## OBTDs ###################    
+     ################## OBTDs ###################
     djt = float(get("Change in spin of target: <<<<<\n",djt))
     dtt = float(get("Change in isospin of target:\n",1.0))
     obtd_filename_t = str(get("Enter filename/path to OXBASH obtd file","t331dp150.obd"))
     fold_t_obtds = get_obtd(obtd_filename_t,djt)
-    prefactor_t = get_zT_prefactor(jti,tti,float(tzti),dtt,float(tztf)-float(tzti),ttf,float(tztf))   
+    prefactor_t = get_zT_prefactor(jti,tti,float(tzti),dtt,float(tztf)-float(tzti),ttf,float(tztf))
     print "Target prefactor = ",prefactor_t
     for obtd in fold_t_obtds:
         line = form.FortranRecordWriter('(I5,I5,I5,F5.1,F17.6)')
@@ -259,7 +266,8 @@ def init_from_template():
     file.write(line+'\n')
     if manual_entry:
         wsaw_targ = str(get("Enter filename of target WSAW radial wavefunction file:\n",wsaw_targ))
-    line = form.FortranRecordWriter('(A7)')
+    wsaw_targ = padstr(wsaw_targ)
+    line = form.FortranRecordWriter('(A8)')
     line = line.write([wsaw_targ])
     file.write(line+'\n')
     ################### Line 6 ###################
@@ -296,7 +304,7 @@ def init_from_template():
 
 def init_from_clean():
     print 1
-        
+
 if __name__=="__main__":
     init_tab_complete()
     bool_template = get("Would you like to load a template fold input file (yes/no)?","yes")
@@ -304,4 +312,3 @@ if __name__=="__main__":
         init_from_template()
     else:
         init_from_clean()
-        
