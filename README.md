@@ -1,11 +1,10 @@
 # origami
-A convenient question-answer application for generating input files for the nuclear reactions code FOLD.
+A convenient question-answer application for generating input files for the nuclear reactions code WSAW, FOLD, and DWHI. It also can take a single column based input file.
 
 
-Example input file
+Example input file:
 
 ```
-<pike:test.results >more inputfile_log
 projectile                                                      # Generating WSAW input file for projectile or target system?
 wsaw_projectile.inp                                             # Enter a name for the WSAW input file to be generated
 6LI6LI                                                          # Enter a filename for the WSAW output file. Note that this filename is restricted to 8 characters or less
