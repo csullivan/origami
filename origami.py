@@ -7,8 +7,21 @@ import math
 from sympy.physics.quantum.cg import CG
 from sympy import S
 
+input_log = []
+
 def get(prompt, default):
-    return raw_input("%s [%s] " % (prompt, default)) or default
+    result = raw_input("%s [%s] " % (prompt, default)) or default
+    if '#' in result:
+        result = result.split()[0].strip()
+    input_log.append([result,prompt])
+    return result
+
+def save_input_log():
+    output = open('./inputfile_log','wb')
+    for entry in input_log:
+        prompt = entry[1].replace("\n"," ")
+        output.write(padstr(entry[0],64)+"# "+prompt+"\n")
+    output.close()
 
 def complete(text, state):
     return (glob.glob(text+'*')+[None])[state]
@@ -639,3 +652,5 @@ if __name__=="__main__":
     cerxn.wsaw_inputfile_from_dens()
     cerxn.fold_inputfile_from_template()
     cerxn.dwhi_inputfile_gen()
+
+    save_input_log()
