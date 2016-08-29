@@ -11,7 +11,7 @@ input_log = []
 
 def get(prompt, default):
     result = raw_input("%s [%s] " % (prompt, default)) or default
-    if '#' in result:
+    if '#' in str(result):
         result = result.split()[0].strip()
     input_log.append([result,prompt])
     return result
@@ -20,7 +20,7 @@ def save_input_log():
     output = open('./inputfile_log','wb')
     for entry in input_log:
         prompt = entry[1].replace("\n"," ")
-        output.write(padstr(entry[0],64)+"# "+prompt+"\n")
+        output.write(padstr(str(entry[0]),64)+"# "+prompt+"\n")
     output.close()
 
 def complete(text, state):
@@ -271,8 +271,7 @@ class CEReactions(object):
             file.write(line+'\n')
 
 
-    def fold_inputfile_from_template(self):
-        template_filename = get("Enter a template input file to load","fold.inp")
+    def fold_inputfile_from_template(self,template_filename,manual_entry):
         filename = get("Enter a name for the FOLD input file to be generated","fold.inp")
         assert(template_filename != filename)
 
@@ -333,11 +332,6 @@ class CEReactions(object):
         print "Fold input file loaded, beginning generation of new input file from template. Press enter for each line and if a change is desired, enter it."
         print "######\n\n"
         file = open(filename,"wb")
-        manual_entry = get("Would you like the full version of entry, enter no for the abridged version.","no")
-        if manual_entry == "yes":
-            manual_entry = True
-        else:
-            manual_entry = False
 
 
         ################### Line 1 ###################
@@ -544,6 +538,210 @@ class CEReactions(object):
             file.write(line+'\n')
         file.write('\n')
 
+    def fold_inputfile(self):
+        filename = get("Enter a name for the FOLD input file to be generated","fold.inp")
+
+        self.fold_input_filename = filename
+
+
+        file = open(filename,"wb")
+
+
+        ################### Line 1 ###################
+        output_file = get("Enter a filename for the FOLD output file.\nNote that this filename is restricted to 8 characters or less","FORMFAC")
+        output_file = padstr(output_file)
+        line = form.FortranRecordWriter('(I5,I5,A8)')
+        line = line.write([1,1,output_file[0:9]])
+        file.write(line+'\n')
+
+        self.fold_filename = output_file
+
+        ################### Line 2 ###################
+        nr = int(get("Number of integration steps:\n",600))
+        ns = float(get("Step size (fm):\n",0.03))
+        beam_energy_lab = float(get("Bombarding energy (MeV):\n",600))
+        if self.nwsaw == 2:
+            a = self.a_proj
+        else:
+            a = float(get("Projectile mass number (A):\n",6))
+        line = form.FortranRecordWriter('(I5,F5.2,F10.0,F10.0,I10,I4,I4)')
+        line = line.write([nr,ns,beam_energy_lab,a,1,1,1])
+        file.write(line+'\n')
+
+        self.nr = nr
+        self.dr = ns
+        self.beam_energy_lab = beam_energy_lab
+        if self.nwsaw != 2:
+            self.a_proj = a
+        else:
+            if self.a_proj != a:
+                print "Warning projectile A in FOLD template input is different from that entered for WSAW."
+
+
+        ################### Line 3 ###################
+        jpf = float(get("Spin of the ejectile:\n","0.0"))
+        ppf = str(get("Parity of the ejectile:\n","+"))
+        jpi = float(get("Spin of the projectile:\n","1.0"))
+        ppi = str(get("Parity of the projectile:\n","+"))
+        line = form.FortranRecordWriter('(F10.1,A1,F9.1,A1)')
+        line = line.write([jpf,ppf,jpi,ppi])
+        file.write(line+'\n')
+
+        self.j_ejec = jpf
+        self.p_ejec = ppf
+        self.j_proj = jpi
+        self.p_proj = ppi
+
+        ################### Line 4 ###################
+        tpf = float(get("Isospin of the ejectile:\n","1.0"))
+        tzpf = str(get("Isospin projection of the ejectile:\n","0.0"))
+        tpi = float(get("Isospin of the projectile:\n","0.0"))
+        tzpi = str(get("Isospin projection of the projectile:\n","0.0"))
+        line = form.FortranRecordWriter('(F5.1,A10,F10.1,A11)')
+        line = line.write([tpf,tzpf,tpi,tzpi])
+        file.write(line+'\n')
+
+        self.t_ejec = tpf
+        self.tz_ejec = tzpf
+        self.t_proj = tpi
+        self.t_proj = tzpi
+
+        ################### Line 5 ###################
+        ntypf_p = int(get("NTYPF (=1 static, =2 inelastic, =3 charge exchange):\n","3"))
+        koptn_p = int(get("Transition amplitude type: 1 (S[T]), 2 (S[pn]), 3 (Z[T] - OXBASH OBTD), 4 (Z[pn]), 5 (Wildenthal):\n",3))
+        alpha_p = float(get("Alpha (=0.000 to use WSAW radial wave functions) (projectile):\n","0.0"))
+        line = form.FortranRecordWriter('(I5,I5,F7.3)')
+        line = line.write([ntypf_p,koptn_p,alpha_p])
+        file.write(line+'\n')
+        ################### Line 6 ###################
+        ################## OBTDs ###################
+        djp = float(get("Change in spin projectile/ejectile: <<<<<\n","1.0"))
+        dtp = float(get("Change in isospin projectile/ejectile:\n","1.0"))
+
+        self.djp = djp
+        self.dtp = dtp
+
+        obtd_filename_p = str(get("Enter filename/path to OXBASH obtd file for projectile/ejectile","t331dp150.obd"))
+        fold_p_obtds = get_obtd(obtd_filename_p,djp)
+        prefactor_p = get_zT_prefactor(jpi,tpi,float(tzpi),dtp,float(tzpf)-float(tzpi),tpf,float(tzpf))
+        print "Projectile prefactor = ",prefactor_p
+        for obtd in fold_p_obtds:
+            line = form.FortranRecordWriter('(I5,I5,I5,F5.1,F17.6)')
+            obtd[2] *= prefactor_p
+            line = line.write([obtd[0],obtd[1],int(djp),0.0,obtd[2]])
+            file.write(line+'\n')
+        line = form.FortranRecordWriter('(I5,I5)')
+        line = line.write([-1,-1])
+        file.write(line+'\n')
+
+        if self.nwsaw == 2:
+            wsaw_proj = self.wsaw_proj
+        else:
+            wsaw_proj = str(get("Enter filename of projectile WSAW radial wavefunction file:\n","PROJ"))
+            wsaw_proj = padstr(wsaw_proj)
+
+        line = form.FortranRecordWriter('(A8)')
+        line = line.write([wsaw_proj])
+        file.write(line+'\n')
+
+        ################### Target ###################
+        ################### Line 3 ###################
+        jtf = float(get("Spin of the recoil:\n","1.0"))
+        ptf = str(get("Parity of the recoil:\n","+"))
+        jti = float(get("Spin of the target:\n","0.0"))
+        pti = str(get("Parity of the target:\n","+"))
+        line = form.FortranRecordWriter('(F10.1,A1,F9.1,A1)')
+        line = line.write([jtf,ptf,jti,pti])
+        file.write(line+'\n')
+
+        self.j_recoil = jtf
+        self.p_recoil = ptf
+        self.j_target = jti
+        self.p_target = pti
+
+        ################### Line 4 ###################
+        ttf = float(get("Isospin of the recoil:\n","1.0"))
+        tztf = str(get("Isospin projection of the recoil:\n","0.0"))
+        tti = float(get("Isospin of the target:\n","0.0"))
+        tzti = str(get("Isospin projection of the target:\n","0.0"))
+        line = form.FortranRecordWriter('(F5.1,A10,F10.1,A11)')
+        line = line.write([ttf,tztf,tti,tzti])
+        file.write(line+'\n')
+
+        self.t_recoil = ttf
+        self.tz_recoil =tztf
+        self.t_target = tti
+        self.tz_target = tzti
+
+        ################### Line 5 ###################
+        ntypf_t = int(get("NTYPF (=1 static, =2 inelastic, =3 charge exchange):\n",3))
+        koptn_t = int(get("Transition amplitude type: 1 (S[T]), 2 (S[pn]), 3 (Z[T] - OXBASH OBTD), 4 (Z[pn]), 5 (Wildenthal):\n",3))
+        alpha_t = float(get("Alpha (=0.000 to use WSAW radial wave functions) (target):\n",0.0))
+        line = form.FortranRecordWriter('(I5,I5,F7.3)')
+        line = line.write([ntypf_t,koptn_t,alpha_t])
+        file.write(line+'\n')
+        ################### Line 6 ###################
+        ################## OBTDs ###################
+        djt = float(get("Change in spin target/recoil: \n",1.0))
+        dtt = float(get("Change in isospin target/recoil:\n",1.0))
+
+        self.djt = djt
+        self.dtt = dtt
+
+        obtd_filename_t = str(get("Enter filename/path to OXBASH obtd file for target/recoil","t331dp150.obd"))
+        fold_t_obtds = get_obtd(obtd_filename_t,djt)
+        prefactor_t = get_zT_prefactor(jti,tti,float(tzti),dtt,float(tztf)-float(tzti),ttf,float(tztf))
+        print "Target prefactor = ",prefactor_t
+        for obtd in fold_t_obtds:
+            line = form.FortranRecordWriter('(I5,I5,I5,F5.1,F17.6)')
+            obtd[2] *= prefactor_t
+            line = line.write([obtd[0],obtd[1],int(djt),0.0,obtd[2]])
+            file.write(line+'\n')
+        line = form.FortranRecordWriter('(I5,I5)')
+        line = line.write([-1,-1])
+        file.write(line+'\n')
+
+        if self.nwsaw == 2:
+            wsaw_targ = self.wsaw_targ
+        else:
+            wsaw_targ = str(get("Enter filename of target WSAW radial wavefunction file:\n","TARG"))
+            wsaw_targ = padstr(wsaw_targ)
+
+        line = form.FortranRecordWriter('(A8)')
+        line = line.write([wsaw_targ])
+        file.write(line+'\n')
+        ################### Line 6 ###################
+        fnrm1 = float(get("Normalization of SNKE Yukawas (all ranges) for transformation from tNN to tNA:\n",0.954))
+        fnrm2 = float(get("kA (momentum of projectile in NA frame) instead of lab -- of particular importance for very light (A<10) target nuclei:\n",2.46))
+        line = form.FortranRecordWriter('(F6.3,F9.2,F11.3,A12)')
+        line = line.write([fnrm1,fnrm2,1.000,'love_140'])
+        file.write(line+'\n')
+        nform = int(get("The number of (jr,jp,jt) that will be entered",2))
+
+        self.nform = nform
+
+        line = form.FortranRecordWriter('(I5)')
+        line = line.write([nform])
+        file.write(line+'\n')
+
+        self.formfactors = []
+        for i in range(0,nform):
+            jrjpjt = str(get("(jr,jp,jt)","011"))
+
+            self.formfactors.append(jrjpjt)
+
+            line = form.FortranRecordWriter('(I5,I5,I5,I5)')
+            line = line.write([jrjpjt[0],jrjpjt[1],jrjpjt[2],-1])
+            file.write(line+'\n')
+            line = form.FortranRecordWriter('(F5.2,F10.2,F10.2,F10.2,F10.2,F10.2,F10.2)')
+            line = line.write([1.0,1.0,1.0,1.0,1.0,1.0,1.0,])
+            file.write(line+'\n')
+            line = form.FortranRecordWriter('(F5.2,F10.2,F10.2,F10.2,F10.2,F10.2,F10.2)')
+            line = line.write([1.0,1.0,1.0,1.0,1.0,1.0,1.0,])
+            file.write(line+'\n')
+        file.write('\n')
+
+
     def dwhi_inputfile_gen(self):
         filename = get("Enter a name for the DWHI input file to be generated","dwhi.inp")
         file = open(filename,'wb')
@@ -648,9 +846,20 @@ class CEReactions(object):
 if __name__=="__main__":
     init_tab_complete()
     cerxn = CEReactions()
-    cerxn.wsaw_inputfile_from_dens()
-    cerxn.wsaw_inputfile_from_dens()
-    cerxn.fold_inputfile_from_template()
+    template_filename = get("If you would like to preload FOLD input settings, enter the path to a template fold input file:","None")
+    if template_filename != "" and template_filename != "None":
+        manual_entry = get("Template will be loaded, would you like the full version of entry, enter no for the (shorter) abridged version.","yes")
+        if manual_entry == "yes" or manual_entry == "y":
+            manual_entry = True
+        else:
+            manual_entry = False
+        cerxn.wsaw_inputfile_from_dens()
+        cerxn.wsaw_inputfile_from_dens()
+        cerxn.fold_inputfile_from_template(template_filename,manual_entry)
+    else:
+        cerxn.wsaw_inputfile_from_dens()
+        cerxn.wsaw_inputfile_from_dens()
+        cerxn.fold_inputfile()
     cerxn.dwhi_inputfile_gen()
 
     save_input_log()
