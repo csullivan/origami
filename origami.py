@@ -17,11 +17,14 @@ def get(prompt, default):
     return result
 
 def save_input_log():
+    print
     output = open('./inputfile_log','wb')
     for entry in input_log:
         prompt = entry[1].replace("\n"," ")
         output.write(padstr(str(entry[0]),64)+"# "+prompt+"\n")
+        #print padstr(str(entry[0]),64)+"# "+prompt
     output.close()
+
 
 def complete(text, state):
     return (glob.glob(text+'*')+[None])[state]
@@ -238,7 +241,6 @@ class CEReactions(object):
             if len(lvl) != 9:
                 print "Error in sp levels, bad level: ", lvl
                 continue
-            print i,lvl
             #line = form.FortranRecordWriter('(7F10.2,I2)')
             line = form.FortranRecordWriter('(F10.3,2F10.0,3F10.2,F10.1,I2)')
             line = line.write([a-1,corez,60.,0.65,1.25,1.25,7.0])
@@ -327,10 +329,6 @@ class CEReactions(object):
         nform = line.read(filelist[n])[0]; n+=1
 
 
-
-        print "\n\n######"
-        print "Fold input file loaded, beginning generation of new input file from template. Press enter for each line and if a change is desired, enter it."
-        print "######\n\n"
         file = open(filename,"wb")
 
 
@@ -406,7 +404,7 @@ class CEReactions(object):
         file.write(line+'\n')
         ################### Line 6 ###################
         ################## OBTDs ###################
-        djp = float(get("Change in spin projectile/ejectile: <<<<<\n",djp))
+        djp = float(get("Change in spin projectile/ejectile:\n",djp))
         dtp = float(get("Change in isospin projectile/ejectile:\n",1.0))
 
         self.djp = djp
@@ -477,7 +475,7 @@ class CEReactions(object):
         file.write(line+'\n')
         ################### Line 6 ###################
         ################## OBTDs ###################
-        djt = float(get("Change in spin target/recoil: <<<<<\n",djt))
+        djt = float(get("Change in spin target/recoil:\n",djt))
         dtt = float(get("Change in isospin target/recoil:\n",1.0))
 
         self.djt = djt
@@ -615,7 +613,7 @@ class CEReactions(object):
         file.write(line+'\n')
         ################### Line 6 ###################
         ################## OBTDs ###################
-        djp = float(get("Change in spin projectile/ejectile: <<<<<\n","1.0"))
+        djp = float(get("Change in spin projectile/ejectile:\n","1.0"))
         dtp = float(get("Change in isospin projectile/ejectile:\n","1.0"))
 
         self.djp = djp
@@ -682,7 +680,7 @@ class CEReactions(object):
         file.write(line+'\n')
         ################### Line 6 ###################
         ################## OBTDs ###################
-        djt = float(get("Change in spin target/recoil: \n",1.0))
+        djt = float(get("Change in spin target/recoil:\n",1.0))
         dtt = float(get("Change in isospin target/recoil:\n",1.0))
 
         self.djt = djt
