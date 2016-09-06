@@ -782,7 +782,12 @@ class CEReactions(object):
                 omp_zp = self.z_proj
                 omp_at = self.a_target
                 omp_zt = self.z_target
-                omp_radius = float(get("coulomb radius (multiplies TARGET mass to 1/3)","1.00"))
+                omp_radius = float(get("Entrance channel coulomb radius (positive radius will be interpreted as r*At**1/3, negative radius will be interpreted as r*[At**1/3 + Ap**1/3])","1.00"))
+                if omp_radius < 0:
+                    scale = (omp_at**(1./3.) + omp_ap**(1./3.))/(omp_at**(1./3.))
+                    omp_radius = abs(omp_radius)*scale
+                    print "\nUsing effective coulomb radius: ", omp_radius
+
                 self.omp_radius = omp_radius
             elif channel == "Outgoing":
                 omp_energy = float(get("Enter reaction Qvalue (outgoing energy): ","0.0"))
@@ -790,7 +795,11 @@ class CEReactions(object):
                 omp_zp = self.z_ejec
                 omp_at = self.a_recoil
                 omp_zt = self.z_recoil
-                omp_radius = float(get("coulomb radius (multiplies RECOIL mass to 1/3)",str(self.omp_radius)))
+                omp_radius = float(get("Exit channel coulomb radius (positive radius will be interpreted as r*Ar**1/3, negative radius will be interpreted as r*[Ar**1/3 + Ae**1/3])",str(self.omp_radius)))
+                if omp_radius < 0:
+                    scale = (omp_at**(1./3.) + omp_ap**(1./3.))/(omp_at**(1./3.))
+                    omp_radius = abs(omp_radius)*scale
+                    print "\nUsing effective coulomb radius: ", omp_radius
 
             line = line.write([omp_energy,omp_ap,omp_zp,omp_at,omp_zt,omp_radius,1,0])
             file.write(line+'\n')
@@ -798,11 +807,20 @@ class CEReactions(object):
             pot_kind = int(get(channel+" channel potential option (1=WS, 2=surface WS, 3=second derivative, 15 = read in potential)","1"))
             if pot_kind == 1:
                 omp_re_v = float(get("OMP volume (real)","-50.0"))
-                omp_re_r = float(get("OMP radius (real)","1.0"))
+                omp_re_r = float(get("OMP radius (real) [negative implies R_omp=r*[Ar**1/3 + Ae**1/3]","1.0"))
+                if omp_re_r < 0:
+                    scale = (omp_at**(1./3.) + omp_ap**(1./3.))/(omp_at**(1./3.))
+                    omp_re_r = abs(omp_re_r)*scale
+                    print "\nUsing effective (real) OMP radius: ",omp_re_r
                 omp_re_a = float(get("OMP diffuseness (real)","0.5"))
                 omp_re_ls = float(get("OMP spin orbit (real)","0.0"))
                 omp_im_v = float(get("OMP volume (imaginary)","-50.0"))
-                omp_im_r = float(get("OMP radius (imaginary)","1.0"))
+                omp_im_r = float(get("OMP radius (imaginary) [negative implies R_omp=r*[Ar**1/3 + Ae**1/3]","1.0"))
+                if omp_im_r < 0:
+                    scale = (omp_at**(1./3.) + omp_ap**(1./3.))/(omp_at**(1./3.))
+                    omp_im_r = abs(omp_im_r)*scale
+                    print omp_im_r
+                    print "Using effective (imaginary) OMP radius: ", omp_im_r
                 omp_im_a = float(get("OMP diffuseness (imaginary)","0.5"))
                 omp_im_ls = float(get("OMP spin orbit (imaginary)","0.0"))
                 line = form.FortranRecordWriter('(F7.4,F7.1,3F7.3,F7.1,4F7.3)')
