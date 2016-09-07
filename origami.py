@@ -71,7 +71,7 @@ def get_obtd(obtd_filename,dj):
         obtd_list.append(line)
     mark = 0
     for i,line in enumerate(obtd_list):
-        if len(line) == 7 and float(line[0][:-1]) == dj:
+        if '!' not in line[0] and len(line) == 7 and float(line[0][:-1]) == dj:
             mark = i
     obtds = []
     fold_obtds = []
@@ -239,8 +239,18 @@ class CEReactions(object):
             if len(lvl)==0:
                 continue
             if len(lvl) != 9:
-                print "Error in sp levels, bad level: ", lvl
-                continue
+                if len(lvl)==8:
+                    new_lvl = []
+                    for i,col in enumerate(lvl):
+                        if i == 2:
+                            new_lvl.append(col[0])
+                            new_lvl.append(col[1:])
+                        else:
+                            new_lvl.append(col)
+                    lvl = new_lvl
+                else:
+                    print "Error in sp levels, bad level: ", lvl
+                    continue
             #line = form.FortranRecordWriter('(7F10.2,I2)')
             line = form.FortranRecordWriter('(F10.3,2F10.0,3F10.2,F10.1,I2)')
             line = line.write([a-1,corez,60.,0.65,1.25,1.25,7.0])
