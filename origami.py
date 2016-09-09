@@ -4,15 +4,22 @@ import readline, glob
 import fortranformat as form
 import numpy as np
 import math
+from Queue import *
+from nuclear_qvalue import get_ame_q as qval_ame12
 from sympy.physics.quantum.cg import CG
 from sympy import S
+import argparse
+
 
 input_log = []
 
 def get(prompt, default):
     result = raw_input("%s [%s] " % (prompt, default)) or default
     if '#' in str(result):
-        result = result.split()[0].strip()
+        if '#' in result.split()[0]:
+            result = default
+        else:
+            result = result.split()[0].strip()
     input_log.append([result,prompt])
     return result
 
@@ -55,8 +62,13 @@ def get_zT_prefactor(Ji,Ti,Tiz,dT,dTz,Tf,Tfz):
     cg = CG(Ti,Tiz,dT,dTz,Tf,Tfz)
     return ((math.sqrt(2*dT+1))/(math.sqrt(2*Ji+1)*math.sqrt(2*Tf+1)))*float(cg.doit())
 
+all_states_dict = {}
+def get_obtd(obtd_filename,dj,state=0):
+    try:
+        return all_states_dict[obtd_filename][state]
+    except:
+        pass
 
-def get_obtd(obtd_filename,dj):
     oxbash_to_fold_key_map = init_obtd_key_map()
     try:
         obtd_file = open(obtd_filename,"rb")
@@ -69,19 +81,31 @@ def get_obtd(obtd_filename,dj):
             continue
         line = line.split()
         obtd_list.append(line)
-    mark = 0
+    marks = []
+    energies = Queue()
     for i,line in enumerate(obtd_list):
         if '!' not in line[0] and len(line) == 7 and float(line[0][:-1]) == dj:
-            mark = i
+            marks.append(i)
+            e = float(line[3][:-1])-float(line[4][:-1])
+            energies.put(e)
+
+    # the last mark is the end of the file
+    marks.append(len(obtd_list))
     obtds = []
-    fold_obtds = []
-    for i in range(mark+1,len(obtd_list)):
-        if len(obtd_list[i])==7:
-            break
-        if len(obtd_list[i])>3:
-            obtds.append([int(obtd_list[i][0][:-1]),int(obtd_list[i][1][:-1]),float(obtd_list[i][3][:-1])])
-            fold_obtds.append([oxbash_to_fold_key_map[int(obtd_list[i][0][:-1])],oxbash_to_fold_key_map[int(obtd_list[i][1][:-1])],float(obtd_list[i][3][:-1])])
-    return fold_obtds
+    all_states = []
+    for n,mark in enumerate(marks[:-1]):
+        fold_obtds = []
+        for i in range(mark+1,marks[n+1]):
+            #if len(obtd_list[i])==7:
+            #    break
+            if len(obtd_list[i])>3:
+                obtds.append([int(obtd_list[i][0][:-1]),int(obtd_list[i][1][:-1]),float(obtd_list[i][3][:-1])])
+                fold_obtds.append([oxbash_to_fold_key_map[int(obtd_list[i][0][:-1])],oxbash_to_fold_key_map[int(obtd_list[i][1][:-1])],float(obtd_list[i][3][:-1])])
+
+        all_states.append([energies.get(),fold_obtds])
+
+    all_states_dict[obtd_filename] = all_states
+    return all_states[state]
 
 def get_number_of_obtds_from_fold_input_file(filelist):
     obtd_count_projectile = 0
@@ -283,7 +307,7 @@ class CEReactions(object):
             file.write(line+'\n')
 
 
-    def fold_inputfile_from_template(self,template_filename,manual_entry):
+    def fold_inputfile_from_template(self,template_filename,manual_entry,nstate=1):
         filename = get("Enter a name for the FOLD input file to be generated","fold.inp")
         assert(template_filename != filename)
 
@@ -424,7 +448,8 @@ class CEReactions(object):
         fold_p_obtds = get_obtd(obtd_filename_p,djp)
         prefactor_p = get_zT_prefactor(jpi,tpi,float(tzpi),dtp,float(tzpf)-float(tzpi),tpf,float(tzpf))
         print "Projectile prefactor = ",prefactor_p
-        for obtd in fold_p_obtds:
+        self.ejec_ex = fold_p_obtds[0]
+        for obtd in fold_p_obtds[1]:
             line = form.FortranRecordWriter('(I5,I5,I5,F5.1,F17.6)')
             obtd[2] *= prefactor_p
             line = line.write([obtd[0],obtd[1],int(djp),0.0,obtd[2]])
@@ -492,10 +517,11 @@ class CEReactions(object):
         self.dtt = dtt
 
         obtd_filename_t = str(get("Enter filename/path to OXBASH obtd file for target/recoil","t331dp150.obd"))
-        fold_t_obtds = get_obtd(obtd_filename_t,djt)
+        fold_t_obtds = get_obtd(obtd_filename_t,djt,state=nstate)
         prefactor_t = get_zT_prefactor(jti,tti,float(tzti),dtt,float(tztf)-float(tzti),ttf,float(tztf))
         print "Target prefactor = ",prefactor_t
-        for obtd in fold_t_obtds:
+        self.recoil_ex = fold_t_obtds[0]
+        for obtd in fold_t_obtds[1]:
             line = form.FortranRecordWriter('(I5,I5,I5,F5.1,F17.6)')
             obtd[2] *= prefactor_t
             line = line.write([obtd[0],obtd[1],int(djt),0.0,obtd[2]])
@@ -546,8 +572,14 @@ class CEReactions(object):
             file.write(line+'\n')
         file.write('\n')
 
-    def fold_inputfile(self):
+    def fold_inputfile(self,nstate=0):
         filename = get("Enter a name for the FOLD input file to be generated","fold.inp")
+        if nstate != 0:
+            filename = filename.split('.')
+            try:
+                filename = filename[0]+str(nstate)+"."+filename[1]
+            except:
+                filename = filename[0]+str(nstate)
 
         self.fold_input_filename = filename
 
@@ -633,7 +665,8 @@ class CEReactions(object):
         fold_p_obtds = get_obtd(obtd_filename_p,djp)
         prefactor_p = get_zT_prefactor(jpi,tpi,float(tzpi),dtp,float(tzpf)-float(tzpi),tpf,float(tzpf))
         print "Projectile prefactor = ",prefactor_p
-        for obtd in fold_p_obtds:
+        self.ejec_ex = fold_p_obtds[0]
+        for obtd in fold_p_obtds[1]:
             line = form.FortranRecordWriter('(I5,I5,I5,F5.1,F17.6)')
             obtd[2] *= prefactor_p
             line = line.write([obtd[0],obtd[1],int(djp),0.0,obtd[2]])
@@ -697,10 +730,11 @@ class CEReactions(object):
         self.dtt = dtt
 
         obtd_filename_t = str(get("Enter filename/path to OXBASH obtd file for target/recoil","t331dp150.obd"))
-        fold_t_obtds = get_obtd(obtd_filename_t,djt)
+        fold_t_obtds = get_obtd(obtd_filename_t,djt,state=nstate)
         prefactor_t = get_zT_prefactor(jti,tti,float(tzti),dtt,float(tztf)-float(tzti),ttf,float(tztf))
         print "Target prefactor = ",prefactor_t
-        for obtd in fold_t_obtds:
+        self.recoil_ex = fold_t_obtds[0]
+        for obtd in fold_t_obtds[1]:
             line = form.FortranRecordWriter('(I5,I5,I5,F5.1,F17.6)')
             obtd[2] *= prefactor_t
             line = line.write([obtd[0],obtd[1],int(djt),0.0,obtd[2]])
@@ -750,8 +784,16 @@ class CEReactions(object):
         file.write('\n')
 
 
-    def dwhi_inputfile_gen(self):
+    def dwhi_inputfile_gen(self,nstate=0):
         filename = get("Enter a name for the DWHI input file to be generated","dwhi.inp")
+        if nstate != 0:
+            filename = filename.split('.')
+            try:
+                filename = filename[0]+str(nstate)+"."+filename[1]
+            except:
+                filename = filename[0]+str(nstate)
+
+        self.fold_input_filename = filename
         file = open(filename,'wb')
 
         ################### Line 1 ###################
@@ -800,7 +842,9 @@ class CEReactions(object):
 
                 self.omp_radius = omp_radius
             elif channel == "Outgoing":
-                omp_energy = float(get("Enter reaction Qvalue (outgoing energy): ","0.0"))
+                self.ejec_ex = float(get("Enter ejectile state excitation energy (MeV)",self.ejec_ex))
+                self.recoil_ex = float(get("Enter recoil state excitation energy (MeV)",self.recoil_ex))
+                omp_energy = float(get("Enter reaction Qvalue (outgoing energy): ",  qval_ame12(self.a_recoil,self.z_target,self.z_recoil)+qval_ame12(self.a_proj,self.z_proj,self.z_ejec)-self.recoil_ex-self.ejec_ex))
                 omp_ap = self.a_ejec
                 omp_zp = self.z_ejec
                 omp_at = self.a_recoil
@@ -870,7 +914,14 @@ class CEReactions(object):
 
 
 if __name__=="__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-target_state", type=int,help="nth state of target/recoil system to use in obd file",default=0)
+    args = parser.parse_args()
+
+
     init_tab_complete()
+
+
     cerxn = CEReactions()
     template_filename = get("If you would like to preload FOLD input settings, enter the path to a template fold input file:","None")
     if template_filename != "" and template_filename != "None":
@@ -881,11 +932,11 @@ if __name__=="__main__":
             manual_entry = False
         cerxn.wsaw_inputfile_from_dens()
         cerxn.wsaw_inputfile_from_dens()
-        cerxn.fold_inputfile_from_template(template_filename,manual_entry)
+        cerxn.fold_inputfile_from_template(template_filename,manual_entry,nstate=args.target_state)
     else:
         cerxn.wsaw_inputfile_from_dens()
         cerxn.wsaw_inputfile_from_dens()
-        cerxn.fold_inputfile()
-    cerxn.dwhi_inputfile_gen()
+        cerxn.fold_inputfile(nstate=args.target_state)
+    cerxn.dwhi_inputfile_gen(nstate=args.target_state)
 
     save_input_log()
