@@ -307,9 +307,16 @@ class CEReactions(object):
             file.write(line+'\n')
 
 
-    def fold_inputfile_from_template(self,template_filename,manual_entry,nstate=1):
+    def fold_inputfile_from_template(self,template_filename,manual_entry,nstate=0):
         filename = get("Enter a name for the FOLD input file to be generated","fold.inp")
         assert(template_filename != filename)
+
+        if nstate != 0:
+            filename = filename.split('.')
+            try:
+                filename = filename[0]+str(nstate)+"."+filename[1]
+            except:
+                filename = filename[0]+str(nstate)
 
         self.fold_input_filename = filename
 
@@ -793,7 +800,7 @@ class CEReactions(object):
             except:
                 filename = filename[0]+str(nstate)
 
-        self.fold_input_filename = filename
+        self.dwhi_input_filename = filename
         file = open(filename,'wb')
 
         ################### Line 1 ###################
