@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright 2014-2016 Chris Sullivan
+# Copyright 2014-2017 Chris Sullivan
 import readline, glob
 import fortranformat as form
 import numpy as np
@@ -62,6 +62,34 @@ def get_zT_prefactor(Ji,Ti,Tiz,dT,dTz,Tf,Tfz):
     cg = CG(Ti,Tiz,dT,dTz,Tf,Tfz)
     return ((math.sqrt(2*dT+1))/(math.sqrt(2*Ji+1)*math.sqrt(2*Tf+1)))*float(cg.doit())
 
+def correct_obtd_prefactor(obtd,obtd_filename,ji,ti,tzi,tzf,tzf_file,dt,tf):
+    obtd_type = get_obtd_filetype(obtd_filename)
+    prefactor = get_zT_prefactor(ji,ti,float(tzi),dt,float(tzf)-float(tzi),tf,float(tzf))
+
+    if obtd_type == 'dt':
+        obtd[2] *= prefactor
+    elif obtd_type == 'pn':
+        obtd[2] /= math.sqrt(2.*ji+1)
+        if float(tzf) != tzf_file:
+            print 'Isospin projection of obtd file and request do not match.'
+            print 'Adjusting isospin prefactors to obtd for requested reaction.'
+            prefactor_file = get_zT_prefactor(ji,ti,float(tzi),dt,float(tzf_file)-float(tzi),tf,float(tzf_file))
+            obtd[2] = prefactor*obtd[2]/prefactor_file
+    else:
+        print "Unknown obtd filetype."
+        exit()
+
+    return obtd
+
+
+def get_obtd_filetype(filename):
+    filetype = ''
+    rxn = ''
+    for i,line in enumerate(open(filename)):
+        if i == 0:
+            filetype = line.split()[0]
+    return filetype
+
 all_states_dict = {}
 def get_obtd(obtd_filename,dj,state=0):
     try:
@@ -83,8 +111,12 @@ def get_obtd(obtd_filename,dj,state=0):
         obtd_list.append(line)
     marks = []
     energies = Queue()
+    once = True
     for i,line in enumerate(obtd_list):
         if '!' not in line[0] and len(line) == 7 and float(line[0][:-1]) == dj:
+            if (once):
+                once = False
+                tzf = float(obtd_list[i-1][5][:-1])
             marks.append(i)
             e = float(line[3][:-1])-float(line[4][:-1])
             energies.put(e)
@@ -105,7 +137,7 @@ def get_obtd(obtd_filename,dj,state=0):
         all_states.append([energies.get(),fold_obtds])
 
     all_states_dict[obtd_filename] = all_states
-    return all_states[state]
+    return tzf, all_states[state]
 
 def get_number_of_obtds_from_fold_input_file(filelist):
     obtd_count_projectile = 0
@@ -430,6 +462,9 @@ class CEReactions(object):
         line = line.write([tpf,tzpf,tpi,tzpi])
         file.write(line+'\n')
 
+        tzpf = float(tzpf)
+        tzpi = float(tzpi)
+
         self.t_ejec = tpf
         self.tz_ejec = tzpf
         self.t_proj = tpi
@@ -452,13 +487,15 @@ class CEReactions(object):
         self.dtp = dtp
 
         obtd_filename_p = str(get("Enter filename/path to OXBASH obtd file for projectile/ejectile","t331dp150.obd"))
-        fold_p_obtds = get_obtd(obtd_filename_p,djp)
+        rxntype, obtd_type = get_obtd_filetype(obtd_filename_p)
+        tzf_file,fold_p_obtds = get_obtd(obtd_filename_p,djp)
         prefactor_p = get_zT_prefactor(jpi,tpi,float(tzpi),dtp,float(tzpf)-float(tzpi),tpf,float(tzpf))
         print "Projectile prefactor = ",prefactor_p
         self.ejec_ex = fold_p_obtds[0]
         for obtd in fold_p_obtds[1]:
             line = form.FortranRecordWriter('(I5,I5,I5,F5.1,F17.6)')
-            obtd[2] *= prefactor_p
+            #obtd[2] *= prefactor_p
+            obtd = correct_obtd_prefactor(obtd,obtd_filename_p,jpi,tpi,tzpi,tzpf,tzf_file,dtp,tpf)
             line = line.write([obtd[0],obtd[1],int(djp),0.0,obtd[2]])
             file.write(line+'\n')
         line = form.FortranRecordWriter('(I5,I5)')
@@ -502,8 +539,10 @@ class CEReactions(object):
         line = line.write([ttf,tztf,tti,tzti])
         file.write(line+'\n')
 
+        tztf = float(tztf)
+        tzti = float(tzti)
         self.t_recoil = ttf
-        self.tz_recoil =tztf
+        self.tz_recoil = tztf
         self.t_target = tti
         self.tz_target = tzti
 
@@ -524,13 +563,15 @@ class CEReactions(object):
         self.dtt = dtt
 
         obtd_filename_t = str(get("Enter filename/path to OXBASH obtd file for target/recoil","t331dp150.obd"))
-        fold_t_obtds = get_obtd(obtd_filename_t,djt,state=nstate)
+        rxntype, obtd_type = get_obtd_filetype(obtd_filename_t)
+        tzf_file,fold_t_obtds = get_obtd(obtd_filename_t,djt,state=nstate)
         prefactor_t = get_zT_prefactor(jti,tti,float(tzti),dtt,float(tztf)-float(tzti),ttf,float(tztf))
         print "Target prefactor = ",prefactor_t
         self.recoil_ex = fold_t_obtds[0]
         for obtd in fold_t_obtds[1]:
             line = form.FortranRecordWriter('(I5,I5,I5,F5.1,F17.6)')
-            obtd[2] *= prefactor_t
+            #obtd[2] *= prefactor_t
+            obtd = correct_obtd_prefactor(obtd,obtd_filename_t,jti,tti,tzti,tztf,tzf_file,dtt,ttf)
             line = line.write([obtd[0],obtd[1],int(djt),0.0,obtd[2]])
             file.write(line+'\n')
         line = form.FortranRecordWriter('(I5,I5)')
@@ -669,13 +710,15 @@ class CEReactions(object):
         self.dtp = dtp
 
         obtd_filename_p = str(get("Enter filename/path to OXBASH obtd file for projectile/ejectile","t331dp150.obd"))
-        fold_p_obtds = get_obtd(obtd_filename_p,djp)
+        rxntype, obtd_type = get_obtd_filetype(obtd_filename_p)
+        tzf_file,fold_p_obtds = get_obtd(obtd_filename_p,djp)
         prefactor_p = get_zT_prefactor(jpi,tpi,float(tzpi),dtp,float(tzpf)-float(tzpi),tpf,float(tzpf))
         print "Projectile prefactor = ",prefactor_p
         self.ejec_ex = fold_p_obtds[0]
         for obtd in fold_p_obtds[1]:
             line = form.FortranRecordWriter('(I5,I5,I5,F5.1,F17.6)')
-            obtd[2] *= prefactor_p
+            #obtd[2] *= prefactor_p
+            obtd = correct_obtd_prefactor(obtd,obtd_filename_p,jpi,tpi,tzpi,tzpf,tzf_file,dtp,tpf)
             line = line.write([obtd[0],obtd[1],int(djp),0.0,obtd[2]])
             file.write(line+'\n')
         line = form.FortranRecordWriter('(I5,I5)')
@@ -737,13 +780,13 @@ class CEReactions(object):
         self.dtt = dtt
 
         obtd_filename_t = str(get("Enter filename/path to OXBASH obtd file for target/recoil","t331dp150.obd"))
-        fold_t_obtds = get_obtd(obtd_filename_t,djt,state=nstate)
-        prefactor_t = get_zT_prefactor(jti,tti,float(tzti),dtt,float(tztf)-float(tzti),ttf,float(tztf))
-        print "Target prefactor = ",prefactor_t
+        tzf_file,fold_t_obtds = get_obtd(obtd_filename_t,djt,state=nstate)
         self.recoil_ex = fold_t_obtds[0]
         for obtd in fold_t_obtds[1]:
             line = form.FortranRecordWriter('(I5,I5,I5,F5.1,F17.6)')
-            obtd[2] *= prefactor_t
+
+            obtd = correct_obtd_prefactor(obtd,obtd_filename_t,jti,tti,tzti,tztf,tzf_file,dtt,ttf)
+
             line = line.write([obtd[0],obtd[1],int(djt),0.0,obtd[2]])
             file.write(line+'\n')
         line = form.FortranRecordWriter('(I5,I5)')
